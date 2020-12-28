@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+	<flow name="unblock-flowFlow" doc:id="efac1818-5109-4609-93f2-59d25e90e67d" >
+		<logger level="INFO" doc:name="Logger" doc:id="ba3c9db8-a367-4b1d-9b93-1f70aa7b3086" message="Request to unblock account with payload as #[payload] received at #[now()]"/>
+		<ee:transform doc:name="Transform Message" doc:id="06da6acf-d5c6-4499-8102-c6f743c208ed" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="payloadVar" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	username : payload.user,
+	password : payload.password,
+	custAccNum : payload.accountNum,
+	bankName : payload.bank
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="9a6c8b6b-3b01-4ab4-9611-a47301766267" >
+			<when expression="#[vars.payloadVar.username == 'admin' and vars.payloadVar.password == 'admin']">
+				<flow-ref doc:name="Flow Reference" doc:id="dbcef787-19ac-4bb4-9768-daff4e0ed445" name="unblock-flowFlow-databaseupdate"/>
+			</when>
+		</choice>
+	</flow>
+	<flow name="unblock-flowFlow-databaseupdate" doc:id="0fbd8925-a056-4790-9624-695481e92c0b" >
+		<db:select doc:name="Select" doc:id="2257f6e2-8a8a-4d98-9311-0a00b0003254" config-ref="AWSDB">
+			<db:sql ><![CDATA[SELECT bankName,accountStatus,mailId FROM Bank_Transactions WHERE custAccNum = :custnum]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	'custnum' : vars.payloadVar.custAccNum
+}]]]></db:input-parameters>
+		</db:select>
+		<choice doc:name="Choice" doc:id="df0523ca-0ca2-420a-84d1-29bd73075df6" >
+			<when expression="#[sizeOf(payload) == 0]">
+				<ee:transform doc:name="Transform Message" doc:id="7a6ce53e-e006-40d6-b906-8df90fae0ba6">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status : "Account " ++(vars.payloadVar.custAccNum default " ")++ " does not exist. Enter Valid Details"	
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<when expression="#[payload[0].accountStatus == 'Active']">
+				<ee:transform doc:name="Transform Message" doc:id="8c7a48e4-0a18-47fe-87ae-db272f972627" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status : "Account " ++(vars.payloadVar.custAccNum default " ")++ " is active"	
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<when expression="#[sizeOf(payload) != 0 and payload[0].accountStatus == 'Inactive']">
+				<set-variable value="#[output application/json
+---
+{emailId : payload[0].mailId}]" doc:name="Set Variable" doc:id="525a5c54-af09-438c-ae56-9d8cee739470" variableName="custEmail"/>
+				<db:update doc:name="Update" doc:id="8b388402-111d-48fc-94b8-7dcf5ae84f7c" config-ref="AWSDB">
+					<db:sql ><![CDATA[UPDATE Bank_Transactions SET accountStatus = 'Active', wrongPin = 0 WHERE custAccNum = :cusnum ]]></db:sql>
+					<db:input-parameters ><![CDATA[#[{
+	cusnum : vars.payloadVar.custAccNum
+}]]]></db:input-parameters>
+				</db:update>
+				<vm:publish doc:name="Publish" doc:id="e71c142a-29c9-43d3-b631-837580be9227" config-ref="VM_Config" queueName="unbmsg">
+					<vm:content ><![CDATA[#[vars.payloadVar default {} ++ vars.custEmail]]]></vm:content>
+				</vm:publish>
+				<ee:transform doc:name="Transform Message" doc:id="92391a49-aafa-4ac7-b823-6f51e8b033c6" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status : "Account " ++(vars.payloadVar.custAccNum default " ")++ " is unblocked"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message" doc:id="df535a78-e7c3-4699-bc8e-bf3378c14ca5" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status : "Check details provided and try once again"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>

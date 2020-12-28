@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+	<flow name="verify-atmPin" doc:id="3e2ac34c-b793-458e-b061-791fe18f9a76" >
+		<ee:transform doc:name="Transform Message" doc:id="ce983626-2ff4-4d1a-8adb-3facdb31a7b6">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="payloadVar"><![CDATA[%dw 2.0
+output application/json
+---
+{
+	bank: attributes.queryParams.bank default "",
+	'type': attributes.queryParams.'type' default "",
+	accountnumber : payload.accountNum default 0,
+	atmPin : payload.atmPin default 0
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="a67b2f65-2909-4549-b3d0-27f7d8f44f5c" config-ref="AWSDB">
+			<db:sql><![CDATA[SELECT custAccNum,atmPin,totalBalance,wrongPin,accountStatus,mailId FROM Bank_Transactions WHERE custAccNum =:caccnu AND bankName = :bname]]></db:sql>
+			<db:input-parameters><![CDATA[#[{
+	caccnu:vars.payloadVar.accountnumber,
+	bname:vars.payloadVar.bank
+}]]]></db:input-parameters>
+		</db:select>
+		<validation:validate-size doc:name="Validate size" doc:id="fe86d566-86b4-433c-a94f-7c2a7e15a727" value="#[payload]" min="1" message='#["Account "++(vars.payloadVar.accountnumber)++" does not exist. Enter Valid Details"]'/>
+		<ee:transform doc:name="Transform Message" doc:id="5f34261a-6c54-4407-9a87-511628296adf">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="dboutputVar"><![CDATA[%dw 2.0
+output application/json
+---
+{
+	CustomerAccNumber : payload[0].custAccNum,
+	AtmPin : payload[0].atmPin,
+	TotalBalance : payload[0].totalBalance,
+	WrongPin : payload[0].wrongPin,
+	AccountStatus : payload[0].accountStatus,
+	mailId : payload[0].mailId
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="140096f5-864b-4cb6-a471-f909e69d13f7">
+			<when expression="#[(vars.dboutputVar.AccountStatus == 'Inactive')]">
+				<ee:transform doc:name="Transform Message" doc:id="aff9a3e3-aeb4-479b-8a14-dea0da72363a">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "status": "Account " ++ (vars.dboutputVar.CustomerAccNumber) ++ " is currently blocked. Please visit nearest branch"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<when expression="#[(vars.dboutputVar.AccountStatus == 'Active') and (vars.dboutputVar.AtmPin == vars.payloadVar.atmPin)]">
+				<choice doc:name="Choice" doc:id="08f9aeaa-55ce-472a-8943-2c03051f7021" >
+					<when expression="#[vars.flowName == 'checkbalance']">
+						<flow-ref doc:name="CheckBalanceResponseFlow" doc:id="f642aa73-37e8-485d-aa86-731fcdb5eda7" name="balanceResponse" />
+					</when>
+					<when expression="#[vars.flowName == 'withdraw']">
+						<ee:transform doc:name="Transform Message" doc:id="8932aa20-f293-4a58-a14b-9dc26380acc8">
+							<ee:message>
+							</ee:message>
+							<ee:variables>
+								<ee:set-variable variableName="withdrawlPayload"><![CDATA[%dw 2.0
+output application/json
+---
+vars.dboutputVar ++ {"withdrawlAmount" : vars.withdraw default 0}]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<flow-ref doc:name="Call WithdrawFlow" doc:id="f8a6bc75-21a5-44b2-8945-692fd0f57f58" name="withdrawal-Flow" />
+					</when>
+					<when expression="#[vars.flowName == 'deposit']">
+						<ee:transform doc:name="Transform Message" doc:id="f4f48e96-cbe5-4a72-837b-d347e7455036" >
+							<ee:message >
+							</ee:message>
+							<ee:variables >
+								<ee:set-variable variableName="depositPayload" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.dboutputVar ++ {"depositAmount" : vars.deposit default 0}]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<flow-ref doc:name="Call depositFlow" doc:id="a20d15a7-2e1f-4eb9-9d80-65b9eabae332" name="deposit-verification-Flow"/>
+					</when>
+				</choice>
+			</when>
+			<when expression="#[(vars.payloadVar.atmPin != vars.dboutputVar.AtmPin) and (vars.dboutputVar.AccountStatus == 'Active')]">
+				<set-variable value="#[vars.dboutputVar.WrongPin as Number + 1]" doc:name="Set Variable" doc:id="aa6a9c72-f78f-46ef-8663-1364e7d540fa" variableName="WrongPin" />
+				<ee:transform doc:name="Transform Message" doc:id="ee3a1f37-4bd5-4adf-a050-4c2c260d39d9">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="outputMsg"><![CDATA[%dw 2.0
+output application/java
+---
+if(vars.wrongPin == 3)
+("Maximum attempts reached. Your Account "
+	++(vars.dboutputVar.CustomerAccNumber as String)
+	++" is temporarily blocked. Reach out to your nearest bank for assistance")
+	else("Login Attempt Failed. Attempts left: "++(3-vars.WrongPin))]]></ee:set-variable>
+						<ee:set-variable variableName="accountStatus"><![CDATA[%dw 2.0
+output application/java
+---
+if(vars.wrongPin == 3)
+"Inactive"
+else "Active"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<async doc:name="Async" doc:id="0a9ac149-27e6-4690-bb88-926f46779d22">
+					<db:update doc:name="Update" doc:id="e2bdb8de-f983-4e41-b9a1-716f7da4e0b0" config-ref="AWSDB">
+						<db:sql><![CDATA[UPDATE Bank_Transactions SET WrongPin = :wrongpin, accountStatus = :status WHERE custAccNum = :cusacc]]></db:sql>
+						<db:input-parameters><![CDATA[#[{
+	wrongpin : vars.WrongPin,
+	cusacc : vars.dboutputVar.CustomerAccNumber,
+	status : vars.accountStatus
+}]]]></db:input-parameters>
+					</db:update>
+				</async>
+				<async doc:name="Async" doc:id="8343365b-a6d2-4afd-b7cd-c9d56867e4df">
+					<vm:publish doc:name="Publish" doc:id="582b0860-ce84-4917-8bd4-da547ca25276" config-ref="VM_Config" queueName="incq">
+						<vm:content ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	customerAccNo : vars.dboutputVar.CustomerAccNumber,
+	AccountStatus : vars.accountStatus,
+	EmailID : vars.dboutputVar.mailId,
+	WrongPin : vars.WrongPin
+}]]]></vm:content>
+					</vm:publish>
+				</async>
+				<ee:transform doc:name="Transform Message" doc:id="2f7e4a4a-3367-470f-a726-e80b9909c27e">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Status" : vars.outputMsg
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message" doc:id="d433f963-e28e-441b-9432-32e119baf535">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Status" : "Please try again later"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>

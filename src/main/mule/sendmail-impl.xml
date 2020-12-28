@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="sendmail-newAccCreateFlow" doc:id="2ffe9915-f7f5-4a01-8a9f-55c61fabfd2d" >
+		<vm:listener queueName="mailq" doc:name="Listener" doc:id="563ff01b-26ba-47d7-8aa1-1837709d6ce7" config-ref="VM_Config"/>
+		<logger level="INFO" doc:name="Logger" doc:id="f2071076-4992-41e4-bcf3-759848484059" message="Mail Initiated for #[payload] in #[flow] at #[now]"/>
+		<set-variable value="#[payload.mail]" doc:name="Set Variable" doc:id="24967a07-b155-4687-9635-e1b6cab1c4ff" variableName="recipientMail"/>
+		<set-variable value="#[payload.caccnum]" doc:name="Set Variable" doc:id="e4575496-5315-4369-8fe7-7913e93dbdbd" variableName="accountNo"/>
+		<set-variable value="#[payload.bname]" doc:name="Set Variable" doc:id="1e3a786b-32d8-40ca-96f6-78847a0d6540" variableName="bankName"/>
+		<email:send doc:name="Send- createnewaccount" doc:id="93196765-7c5f-44ec-a04b-55deef6e96d0" config-ref="Email_SMTP" fromAddress="nrtmule@gmail.com" subject="Congratulations ! Account created">
+			<email:to-addresses >
+				<email:to-address value="#[vars.recipientMail]" />
+			</email:to-addresses>
+			<email:body contentType="text/html">
+				<email:content ><![CDATA[#["Congratulations ! Your account is created Successfully with Account Number " ++ vars.accountNo ++ " with " ++ vars.bankName ++ " Bank"]]]></email:content>
+			</email:body>
+		</email:send>
+	</flow>
+	<flow name="sendmail-checkBalanceFlow" doc:id="fbaa712b-c92e-4a6c-a312-5b0c4b8d00a8" >
+		<vm:listener doc:name="Listener" doc:id="78348d89-6a52-428c-b9c3-0538982a2f89" config-ref="VM_Config" queueName="incq"/>
+		<logger level="INFO" doc:name="Logger" doc:id="96ca01df-ea2f-49ac-b998-d614125ff5e6" message="Mail Initiated for #[payload] in #[flow] at #[now]"/>
+		<ee:transform doc:name="Transform Message" doc:id="25a4bf27-e973-4812-adb8-9ec359e6df26">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="lockoutmsg"><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Subject: "Account Blocked!",
+	To : payload.EmailID,
+	Body : "This is to inform you that Your Account "++(payload.customerAccNo as String)++ " has been be blocked due to 3 failed attempts. Please reach out nearest branch to unblock"
+}]]></ee:set-variable>
+				<ee:set-variable variableName="mailalert" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Subject: "Failed Attempt!",
+	To : payload.EmailID,
+	Body : "This is to inform you that there is a failed transaction happened on Your Account "++(payload.customerAccNo as String)++ " due to incorrect atmPin. Your Account will be blocked after "++(3-payload.WrongPin)++" attempts"
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+		<choice doc:name="Choice" doc:id="8d06e7c9-cce1-454f-950e-6808e7d4ff18">
+			<when expression="#[payload.AccountStatus == 'Inactive']">
+				<email:send doc:name="Mail Alert" doc:id="2e6fec07-a346-4589-933f-e7b0e2d8bd34" config-ref="Email_SMTP" fromAddress="nrtmule@gmail.com" subject="#[vars.mailalert.Subject]">
+					<email:to-addresses >
+						<email:to-address value="#[vars.mailalert.To]" />
+					</email:to-addresses>
+					<email:body contentType="text/html">
+						<email:content ><![CDATA[#[vars.mailalert.Body]]]></email:content>
+					</email:body>
+				</email:send>
+				<email:send doc:name="Block Alert" doc:id="66df22cb-2313-4f7b-89e0-1057816cb8cc" config-ref="Email_SMTP" fromAddress="nrtmule@gmail.com" subject="#[vars.lockoutmsg.Subject]">
+					<email:to-addresses>
+						<email:to-address value="#[vars.lockoutmsg.To]" />
+					</email:to-addresses>
+					<email:body contentType="text/html">
+						<email:content><![CDATA[#[vars.lockoutmsg.Body]]]></email:content>
+					</email:body>
+				</email:send>
+			</when>
+			<otherwise >
+				<email:send doc:name="Mail Alert" doc:id="898a6056-427d-434f-80a3-b6dc437f8bee" config-ref="Email_SMTP" fromAddress="nrtmule@gmail.com" subject="#[vars.mailalert.Subject]" >
+					<email:to-addresses >
+						<email:to-address value="#[vars.mailalert.To]" />
+					</email:to-addresses>
+					<email:body contentType="text/html" >
+						<email:content ><![CDATA[#[vars.mailalert.Body]]]></email:content>
+					</email:body>
+				</email:send>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="sendmail-unblock" doc:id="0806624e-6ce5-4a5a-a17c-76641e67b06e" >
+		<vm:listener doc:name="Listener" doc:id="6a360a37-230b-4d0b-a560-31d6c60e8ebd" config-ref="VM_Config" queueName="unbmsg"/>
+		<logger level="INFO" doc:name="Logger" doc:id="7b4b239c-18e9-49b8-a1f2-025a35a5985c" message="Mail Initiated for #[payload] in #[flow] at #[now]"/>
+		<email:send doc:name="Unblock_Mail" doc:id="b4c7f5f1-a5c8-4ea0-b971-e5e2ac739576" config-ref="Email_SMTP" fromAddress="nrtmule@gmail.com" subject="Account Unblocked !" >
+			<email:to-addresses >
+				<email:to-address value="#[payload.emailId]" />
+			</email:to-addresses>
+			<email:body contentType="text/html" >
+				<email:content ><![CDATA[#["This is to inform you that Your Account has been unblocked"]]]></email:content>
+			</email:body>
+		</email:send>
+		<logger level="INFO" doc:name="Logger" doc:id="6978745b-f0e5-4c62-880f-bcdd6ec69ca0" message="Mail sent for #[payload] in #[flow] at #[now]"/>
+	</flow>
+	<flow name="sendmail-dailybalance" doc:id="9ee5aace-8ddd-421d-b50d-cc4859dc4627" >
+		<vm:listener doc:name="Listener" doc:id="09b81fba-eb70-4c4b-8e6b-cbfdc21a43ec" config-ref="VM_Config" queueName="dailybal"/>
+		<ee:transform doc:name="Transform Message" doc:id="37683919-7aff-4871-a14e-033fdf7e0989" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<email:send doc:name="Daily_Mail" doc:id="ea338a6b-ca31-4bbe-a710-488cf1fe18b8" config-ref="Email_SMTP" fromAddress="nrtmule@gmail.com" subject="Todays Total Balance!" >
+			<email:to-addresses >
+				<email:to-address value="#[payload.mailId]" />
+			</email:to-addresses>
+			<email:body contentType="text/html" >
+				<email:content ><![CDATA[#["Dear "++(payload.custName default " ")++" balance in your Account :" ++(payload.custAccNum default " ")++
+" is "++(payload.totalBalance default " ")++" as on "++ now() as String]]]></email:content>
+			</email:body>
+		</email:send>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="0577224f-1d6b-4c1c-bf89-ce57304ddd75" type="ANY">
+				<logger level="INFO" doc:name="Logger" doc:id="36ca1558-e589-4e2c-a47d-c4afe5cec41b" message="Skipping error record"/>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="sendmail-withDraw" doc:id="6cc596a8-c408-4c2e-b49b-68e8d0056c44" >
+		<vm:listener doc:name="Listener" doc:id="ec9c6a4c-3427-41c5-ad7b-5de96d550779" config-ref="VM_Config" queueName="drawmsg"/>
+		<ee:transform doc:name="Transform Message" doc:id="2e7d56f4-1ba4-4eb9-b4d1-1aedec25836a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<email:send doc:name="Withdraw_Mail" doc:id="e7dde86c-db59-4f1e-a525-a24fab820500" config-ref="Email_SMTP" fromAddress="nrtmule@gmail.com" subject="Transaction Alert!" >
+			<email:to-addresses >
+				<email:to-address value="#[payload.mailId]" />
+			</email:to-addresses>
+			<email:body contentType="text/html" >
+				<email:content ><![CDATA[#["This is to inform you that your Account has been debited with "++(payload.withdrawAmt default " ")++" and your Total balance now :" ++(payload.balance default " ")]]]></email:content>
+			</email:body>
+		</email:send>
+	</flow>
+	<flow name="sendmail-deposit" doc:id="1d339d7f-d7a7-472c-8d80-bc9ecafc7816" >
+		<vm:listener doc:name="Listener" doc:id="f3bbfc12-40a9-470e-a032-24f4dfe73447" config-ref="VM_Config" queueName="depomsg"/>
+		<ee:transform doc:name="Transform Message" doc:id="9cf4650b-06e8-43e2-b23f-1ed2e5c5f69e" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<email:send doc:name="Deposit_Mail" doc:id="da96483c-fa6f-4265-a5a7-23bb20924917" config-ref="Email_SMTP" fromAddress="nrtmule@gmail.com" subject="Transaction Alert!" >
+			<email:to-addresses >
+				<email:to-address value="#[payload.mailId]" />
+			</email:to-addresses>
+			<email:body contentType="text/html" >
+				<email:content ><![CDATA[#["This is to inform you that your Account has been credited with "++(payload.depositAmount default " ")++" and your Total balance now :" ++(payload.balance default " ")]]]></email:content>
+			</email:body>
+		</email:send>
+	</flow>
+</mule>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<sub-flow name="balanceResponse" doc:id="d64ef078-b722-47db-a2bf-b4feebc9e00d" >
+		<logger level="INFO" doc:name="Logger" doc:id="421a5a41-d5cb-4a67-9174-0534006f444e" message="Request for balance check #[payload] completed at #[now()]"/>
+		<ee:transform doc:name="Transform Message" doc:id="11eff767-58e7-4ef7-a42b-c1e5cd5d21a2">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "status": "Total balance in your account " ++ (vars.dboutputVar.CustomerAccNumber) ++ " as on " ++ (now() as String {format: "y-MM-dd"}) ++ " is " ++(vars.dboutputVar.TotalBalance as String)
+} ]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+	</sub-flow>
+	<flow name="checkBalance-Flow" doc:id="8ec30cc9-4984-4219-be1e-378a96237782" >
+		<logger level="INFO" doc:name="Logger" doc:id="2528afdc-e2bf-4783-9c77-0f212a68cb05" message="Request for balance check #[payload] received at #[now()]"/>
+		<set-variable value="checkbalance" doc:name="Set Variable" doc:id="54ecd39e-7989-44f7-a7b0-14b6b6623983" variableName="flowName"/>
+		<flow-ref doc:name="ATM Verification flow" doc:id="2d55c7fb-8d22-43f9-b09b-66d587d05cc0" name="verify-atmPin" />
+	</flow>
+</mule>

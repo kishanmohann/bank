@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:s3="http://www.mulesoft.org/schema/mule/s3"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/s3 http://www.mulesoft.org/schema/mule/s3/current/mule-s3.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="sendfile-implFlow" doc:id="b6ecd21d-f27b-4710-8aca-422264f293f2" >
+		<vm:listener queueName="awss3q" doc:name="Listener" doc:id="704e0155-94c2-457b-883a-6dd1d0b0555e" config-ref="VM_Config"/>
+		<set-variable value='#[payload.caccnum as String ++ "_" ++ payload.cname ++".json"]' doc:name="Set Variable" doc:id="cebddb05-4161-4e97-8957-cda553a81883" variableName="fileName"/>
+		<s3:create-object doc:name="Create object" doc:id="8024a6aa-9b69-4c5f-a1fa-905bdd3363f7" config-ref="Amazon_S3_Configuration" bucketName="kishan27" key="#[vars.fileName]">
+			<s3:object-content ><![CDATA[#[output application/json
+---
+{
+	
+	customerName : payload.cname,
+	bank	: payload.bname,
+	accounttype : payload.atype,
+	branchName : payload.brname,
+	accountNumber : payload.caccnum,
+	atmPin  : 	payload.atmpin,
+	ifscCode : payload.icode,
+	depositAmount : payload.balance,
+	mailId : payload.mail,
+	contact : payload.phone
+
+}]]]></s3:object-content>
+		</s3:create-object>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="8f331884-4485-4d91-95b9-bf5cd8e91449" type="S3:ACCESS_DENIED, S3:ACCOUNT_PROBLEM, S3:AMBIGUOUS_GRANT_BY_EMAIL_ADDRESS, S3:BAD_DIGEST, S3:BUCKET_ALREADY_EXISTS, S3:BUCKET_ALREADY_OWNED_BY_YOU, S3:BUCKET_NOT_EMPTY, S3:CONNECTIVITY, S3:CREDENTIALS_NOT_SUPPORTED, S3:CROSS_LOCATION_LOGGING_PROHIBITED, S3:ENTITY_TOO_LARGE, S3:ENTITY_TOO_SMALL, S3:EXPIRED_TOKEN, S3:ILLEGAL_VERSIONING_CONFIGURATION_EXCEPTION, S3:INCOMPLETE_BODY, S3:INCORRECT_NUMBER_OF_FILES_IN_POST_REQUEST, S3:INLINE_DATA_TOO_LARGE, S3:INTERNAL_ERROR, S3:INVALID_ACCESS_KEY_ID, S3:INVALID_ADDRESSING_HEADER, S3:INVALID_ARGUMENT, S3:INVALID_BUCKET_NAME, S3:INVALID_BUCKET_STATE, S3:INVALID_DIGEST, S3:INVALID_ENCRYPTION_ALGORITHM_ERROR, S3:INVALID_LOCATION_CONSTRAINT, S3:INVALID_OBJECT_STATE, S3:INVALID_PART, S3:INVALID_PART_ORDER, S3:INVALID_PAYER, S3:INVALID_POLICY_DOCUMENT, S3:INVALID_RANGE, S3:INVALID_REQUEST, S3:INVALID_RESPONSE_PRESIGNEDURL_MALFORMED, S3:INVALID_SECURITY, S3:INVALID_SOAP_REQUEST, S3:INVALID_STORAGE_CLASS, S3:INVALID_TARGET_BUCKET_FOR_LOGGING, S3:INVALID_TOKEN, S3:INVALID_URI, S3:KEY_TOO_LONG, S3:MALFORMED_ACL_ERROR, S3:MALFORMED_POST_REQUEST, S3:MALFORMED_XML, S3:MAX_MESSAGE_LENGTH_EXCEEDED, S3:MAX_POST_PRE_DATA_LENGTH_EXCEEDED_ERROR, S3:METADATA_TOO_LARGE, S3:METHOD_NOT_ALLOWED, S3:MISSING_ATTACHMENT, S3:MISSING_CONTENT_LENGTH, S3:MISSING_REQUEST_BODY_ERROR, S3:MISSING_SECURITY_ELEMENT, S3:MISSING_SECURITY_HEADER, S3:NOT_IMPLEMENTED, S3:NOT_SIGNED_UP, S3:NO_LOGGING_STATUS_FOR_KEY, S3:NO_SUCH_BUCKET, S3:NO_SUCH_BUCKET_POLICY, S3:NO_SUCH_KEY, S3:NO_SUCH_LIFECYCLE_CONFIGURATION, S3:NO_SUCH_UPLOAD, S3:NO_SUCH_VERSION, S3:OPERATION_ABORTED, S3:PERMANENT_REDIRECT, S3:PRECONDITION_FAILED, S3:REDIRECT, S3:REQUEST_IS_NOT_MULTI_PART_CONTENT, S3:REQUEST_TIMEOUT, S3:REQUEST_TIME_TOO_SKEWED, S3:REQUEST_TORRENT_OF_BUCKET_ERROR, S3:RESTORE_ALREADY_IN_PROGRESS, S3:RETRY_EXHAUSTED, S3:SERVICE_UNAVAILABLE, S3:SIGNATURE_DOES_NOT_MATCH, S3:SLOW_DOWN, S3:TEMPORARY_REDIRECT, S3:TOKEN_REFRESH_REQUIRED, S3:TOO_MANY_BUCKETS, S3:UNEXPECTED_CONTENT, S3:UNKNOWN, S3:UNRESOLVABLE_GRANT_BY_EMAIL_ADDRESS, S3:USER_KEY_MUST_BE_SPECIFIED">
+				<ee:transform doc:name="Transform Message" doc:id="653fda1f-0239-409a-bbe7-bb407046d53c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Status : "Exception with Amazon s3",
+	ErrorMessage : error.description
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+</mule>

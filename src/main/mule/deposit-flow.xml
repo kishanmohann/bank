@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<flow name="deposit-verification-Flow" doc:id="ec98cca7-a319-4521-aa1b-0461b7972f01" >
+		<set-variable value="#[payload.depositAmount &gt; 0]" doc:name="Set Variable" doc:id="31eab728-1e75-4abd-87f6-39e8cc9172c6" variableName="deposit"/>
+		<set-variable value="deposit" doc:name="Set Variable" doc:id="8bcb573a-f110-40a5-8615-2db38456e1f2" variableName="flowName"/>
+		<flow-ref doc:name="checkAtm" doc:id="f63346b5-1d32-4b25-883d-864ce86180b9" name="verify-atmPin"/>
+	</flow>
+	<flow name="deposit-Flow" doc:id="7911421c-932b-43b5-81cb-dcd418f3f7e5" >
+		<validation:is-true doc:name="Is true" doc:id="3fb1ad9b-9e2a-4ce4-88d7-f32a3a7604f3" expression="#[vars.depositPayload.depositAmount &gt; 0]" message="Deposit Amount is not a valid Number"/>
+		<logger level="INFO" doc:name="Logger" doc:id="be72afd9-36ec-4ae5-97ab-898c7b12a1e6" message="atmPin verified withdrawl process initiated as #[now()]"/>
+		<db:update doc:name="Update" doc:id="b5ee7300-5716-427c-a3cf-d8ba6ad51c8f" config-ref="AWSDB">
+					<db:sql><![CDATA[UPDATE Bank_Transactions SET totalBalance = :newBalance WHERE custAccNum = :accnum]]></db:sql>
+					<db:input-parameters><![CDATA[#[{
+	newBalance : (vars.depositPayload.TotalBalance as Number + vars.depositPayload.depositAmount as Number),
+	accnum : vars.depositPayload.CustomerAccNumber
+}]]]></db:input-parameters>
+				</db:update>
+		<vm:publish doc:name="Publish" doc:id="ab5c1c59-5574-418f-b29f-29ca330d5cd2" config-ref="VM_Config" queueName="depomsg">
+					<vm:content><![CDATA[#[{
+	depositAmount : vars.depositPayload.depositAmount as Number,
+	balance : (vars.depositPayload.TotalBalance as Number default 0 + vars.depositPayload.depositAmount as Number default 0),
+	CustAcc : vars.depositPayload.CustomerAccNumber as Number,
+	mailId : vars.depositPayload.mailId
+}]]]></vm:content>
+				</vm:publish>
+		<ee:transform doc:name="Transform Message" doc:id="198a175f-79f9-4911-a0f3-0b29a428ddfe">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Status": "Amount "++(vars.depositPayload.depositAmount default "")++" is credited to your account . Your total balance is " ++ (vars.depositPayload.TotalBalance as Number + vars.depositPayload.depositAmount as Number) as String default ""
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+	</flow>
+</mule>

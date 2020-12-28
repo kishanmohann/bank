@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<flow name="createAccount-ImplFlow" doc:id="6d31a0c6-281d-478f-878a-59a23adec71c" >
+		<logger level="INFO" doc:name="Logger" doc:id="5bd0fdd1-435c-4ed7-961d-e6cae0f09686" message="Request to create a new account with payload as #[payload] received at #[now()]"/>
+		<ee:transform doc:name="Transform Message" doc:id="40c0037b-f476-4b0f-b081-e1f29d2f5322" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="payloadVar" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	cname : attributes.queryParams.customerName,
+	caccnum : payload.accountNum,
+	atmpin : payload.atmPin,
+	bname : attributes.queryParams.bank,
+	atype : attributes.queryParams."type",
+	icode : payload.ifscCode,
+	brname : attributes.queryParams.branchName,
+	balance : payload.depositAmount default 0 as Number,
+	ttime : now() as String,
+	mail : payload.mailId,
+	phone : payload.contact
+	
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<db:insert doc:name="Insert" doc:id="9dd3d6b2-eb0b-4e62-9dfd-b34eb263b8af" config-ref="AWSDB">
+			<db:sql ><![CDATA[INSERT INTO Bank_Transactions (custName,custAccNum,atmPin,bankName,accountType,
+ifscCode,branchName,totalBalance,transactionTimeStamp,mailId,phoneNumber) 
+VALUES(:cname,:caccnum,:atmpin,:bname,:atype,:icode,:brname,:balance,:ttime,:mail,:phone)
+]]></db:sql>
+			<db:input-parameters ><![CDATA[#[vars.payloadVar]]]></db:input-parameters>
+		</db:insert>
+		<async doc:name="Async" doc:id="9935c4b0-3458-4e2a-ac3b-dd989e6178f5" >
+			<vm:publish doc:name="Publish" doc:id="ad3fb837-1a66-4daa-b71f-ccee7edb9a22" config-ref="VM_Config" queueName="mailq">
+			<vm:content><![CDATA[#[vars.payloadVar]]]></vm:content>
+		</vm:publish>
+		</async>
+		<async doc:name="Async" doc:id="70fb5954-5e07-4d75-baec-7ac02a5798ad" >
+			<vm:publish queueName="awss3q" doc:name="Publish" doc:id="a3663695-3dfb-471b-9cc4-c3333972fc9c" config-ref="VM_Config">
+				<vm:content ><![CDATA[#[vars.payloadVar]]]></vm:content>
+			</vm:publish>
+		</async>
+		<logger level="INFO" doc:name="Logger" doc:id="effb222f-f1fe-4e7a-b143-a4e6425c3f47" message="Request to create a new account with payload as #[payload] completed at #[now()]"/>
+		<ee:transform doc:name="Transform Message" doc:id="3ac94966-c3ce-477b-9269-fce0fb7e9315" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Status" : "Account with "++(vars.payloadVar.caccnum default " ")++" number created successfully"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>

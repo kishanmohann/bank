@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<error-handler name="globalErrorHandler" doc:id="f9bfca65-fab3-49df-bb79-bc15b5d92c88" >
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="b1cd166c-1bd6-443c-a9eb-a85392416cc2" type="DB:BAD_SQL_SYNTAX, DB:QUERY_EXECUTION">
+			<ee:transform doc:name="Transform Message" doc:id="e61be69f-0cec-41c9-9fd0-18b2969a48a7" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Status : "Issue with Database Query / 
+	Connectivity issues. Please check with System Admin",
+	ErrorMessage : error.description
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="74022234-9789-4abd-8237-332ad19116c1" type="VM:CONNECTIVITY, VM:QUEUE_TIMEOUT, VM:RETRY_EXHAUSTED">
+			<ee:transform doc:name="Transform Message" doc:id="3e081e2a-b522-44fe-aa0c-29bcd87b6a5f" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Status : "Issue with VM / 
+	Connectivity issues. Please check with System Admin",
+	ErrorMessage : error.description
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="775de58f-5573-4110-b26b-85eee211972b" type="VALIDATION:INVALID_SIZE">
+			<ee:transform doc:name="Transform Message" doc:id="4119cd9c-c55f-46d2-86fd-bc325aa327d3" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Status : "Check your Account number and try again. No results from DB",
+	ErrorMessage : error.description
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="303d57ac-0d56-47d2-bab4-3d60a45cc15a" type="EXPRESSION">
+			<ee:transform doc:name="Transform Message" doc:id="ef45ff12-6b63-4801-89d9-0c956fcc3623" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Status : "Exception in Dataweave",
+	ErrorMessage : error.description
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="2a70571a-b7e6-4125-9f8a-06eb1fa77ac2" type="EMAIL:CONNECTIVITY">
+			<ee:transform doc:name="Transform Message" doc:id="d58d9e07-a188-4213-b174-0849adf211f6" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Status : "Exception in Dataweave",
+	ErrorMessage : error.description
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+		</on-error-propagate>
+	</error-handler>
+</mule>

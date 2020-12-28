@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+	<flow name="scheduler-flowFlow" doc:id="65ac582b-6d99-4a33-92cc-357ce0277af1" initialState="started">
+		<scheduler doc:name="Scheduler" doc:id="9bf81371-93b7-4445-93ff-de74cdbf8a38" >
+			<scheduling-strategy >
+				<cron expression="0 19 * * *" timeZone="Asia/Kolkata" />
+			</scheduling-strategy>
+		</scheduler>
+		<db:select doc:name="Select" doc:id="13c88176-ab88-40c5-bd6a-da7cec0c9fb0" config-ref="AWSDB">
+			<db:sql ><![CDATA[SELECT custName,custAccNum,totalBalance,mailId FROM Bank_Transactions WHERE accountStatus = 'Active']]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="9b9cefdc-39e3-48ba-bc3c-b7e9fc5410fd" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="dad148d0-235c-401a-95ff-617abbfd108c" >
+			<vm:publish doc:name="Publish" doc:id="666609b7-2784-480a-bc25-8a543b15df77" config-ref="VM_Config" queueName="dailybal"/>
+		</parallel-foreach>
+	</flow>
+</mule>

@@ -1,0 +1,31 @@
+awsdb:
+  host : ""
+  port : "3306"
+  user : ""
+  pass : ""
+  db   : ""
+  
+awss3:
+  access : ""
+  secret  : ""
+  vmq : ""
+
+gmail:
+  host: "smtp.gmail.com"
+  port: "587"
+  user: ""
+  password: ""
+  vmq : "mailq"
+
+balance:
+  incorrectq: "incq"
+  dailymsg : "dailybal"
+  
+unblock:
+  vmq: "unbmsg"
+
+withdraw:
+  vmq: "drawmsg"
+ 
+deposit:
+  vmq: "depomsg"
